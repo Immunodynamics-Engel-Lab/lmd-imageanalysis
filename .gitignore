@@ -1,0 +1,8 @@
+# pixi environments
+.pixi
+# pixi environments
+.pixi/*
+!.pixi/config.toml
+pixi.lock
+.vscode
+__pycache__
