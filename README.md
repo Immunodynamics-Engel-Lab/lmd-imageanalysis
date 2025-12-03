@@ -19,7 +19,7 @@ This project exclusively uses the [**Pixi**](https://pixi.sh/latest/python/tutor
 1.  **Clone the repository:**
 
     ```bash
-    git clone [https://github.com/YourUsername/lmd-imageanalysis-pipeline.git](https://github.com/YourUsername/lmd-imageanalysis-pipeline.git)
+    git clone https://github.com/YourUsername/lmd-imageanalysis-pipeline.git
     cd lmd-imageanalysis-pipeline
     ```
 
