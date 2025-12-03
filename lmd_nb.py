@@ -15,6 +15,7 @@ from skimage import exposure
 from skimage.feature import peak_local_max
 from skimage.measure import regionprops_table
 from tqdm import tqdm
+
 # %% [markdown]
 # # 🛠️ Channel Configuration
 #
@@ -24,18 +25,21 @@ from tqdm import tqdm
 # %%
 # Define the default channel indices
 CHANNEL_MAP = {
-    "Marker": 0,          # e.g., Ly6g, GFP, etc.
+    "Marker": 0,  # e.g., Ly6g, GFP, etc.
     "Autofluorescence": 1,
     "DAPI": 2,
 }
 # %% [markdown]
 # # Step 1: Segment Neutrophils
 # %% Use GPU if possible
+# Default is cpsam, if a custom / self-trained model is used please change to the path to the model
+pretrained_model = "cpsam"
+
 if not core.use_gpu():
-    model = models.CellposeModel(gpu=False)
+    model = models.CellposeModel(gpu=False, pretrained_model=pretrained_model)
     print("No GPU access, continuing with CPU...")
 else:
-    model = models.CellposeModel(gpu=True)
+    model = models.CellposeModel(gpu=True, pretrained_model=pretrained_model)
 
 
 # %%
@@ -61,6 +65,7 @@ def segment_with_cellpose(
         tile_overlap=tile_overlap,
     )
     return masks
+
 
 # %% [markdown]
 # # 🛠️ Segmentation Configuration
@@ -329,7 +334,9 @@ def xml_shape_generator(src_path_str):
     shapes_path = dst_path.parent / f"{base}_shapes.xml"
 
     reader = BioImage(src_path)
-    img = reader.get_image_data("CYX").astype(np.float32)[CHANNEL_MAP["Autofluorescence"]]
+    img = reader.get_image_data("CYX").astype(np.float32)[
+        CHANNEL_MAP["Autofluorescence"]
+    ]
     img_inverted = 1 - contrast_stretching(img, (0, 100))
     img_inverted_rescaled = exposure.rescale_intensity(
         img_inverted.copy(), in_range=(0, 1), out_range=(-1, 1)
