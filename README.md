@@ -33,13 +33,21 @@ This project exclusively uses the [**Pixi**](https://pixi.sh/latest/python/tutor
 
 ---
 
-## ▶️ Execution
+## 🔬 Running Prediction and XML Generation
 
-All execution is performed using the `pixi run` command to ensure the correct environment and dependencies are used.
+The analysis pipeline is contained in the `lmd_nb.py` script. This file is a **Jupyter Notebook** utilizing the **Jupytext percent** format, which allows it to be edited easily in any text editor while preserving its executable notebook structure.
 
-### Running Prediction on Images
+### ⚙️ Configuration
 
-The pipeline is in the `lmd_nb.py` script. This script is a jupyter notebook using the jupytext percent format that can be adapted in any text editor and run using the execution command below.
+Before running the pipeline, you must configure the parameters and channel mapping within the `lmd_nb.py` script:
+
+* **Channel Configuration:** The fluorescence channel assignments must be set to match your input image data.
+  * **Default Setup:** The notebook is currently defaulted to: **Marker (Ch 0), Autofluorescence (Ch 1), and DAPI (Ch 2)**. Adjust these channel indices (0-indexed) at the beginning of `lmd_nb.py` as needed.
+* **Parameter Adjustment:** Parameters for specific processing steps can be adjusted directly before their corresponding notebook cells in `lmd_nb.py`.
+
+### 🚀 Execution Command
+
+Once configured, execute the pipeline using the following command:
 
 ```bash
 pixi run python lmd_nb.py

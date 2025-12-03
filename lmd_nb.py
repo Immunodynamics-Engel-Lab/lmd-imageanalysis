@@ -15,10 +15,22 @@ from skimage import exposure
 from skimage.feature import peak_local_max
 from skimage.measure import regionprops_table
 from tqdm import tqdm
-
 # %% [markdown]
-# Step 1: Segment Neutrophils
+# # 🛠️ Channel Configuration
+#
+# Adjust the channel indices below to match your microscopy image configuration.
+# * Channels are 0-indexed (e.g., 0, 1, 2, ...).
+# * The default mapping is: Marker (Ch 0), Autofluorescence (Ch 1), DAPI (Ch 2).
 # %%
+# Define the default channel indices
+CHANNEL_MAP = {
+    "Marker": 0,          # e.g., Ly6g, GFP, etc.
+    "Autofluorescence": 1,
+    "DAPI": 2,
+}
+# %% [markdown]
+# # Step 1: Segment Neutrophils
+# %% Use GPU if possible
 if not core.use_gpu():
     model = models.CellposeModel(gpu=False)
     print("No GPU access, continuing with CPU...")
@@ -36,27 +48,52 @@ def contrast_stretching(img: np.ndarray, percentile: tuple) -> np.ndarray:
     return img
 
 
-def segment_with_cellpose(image_array):
+def segment_with_cellpose(
+    image_array, cellprob_threshold, batch_size, tile_overlap, flow_threshold
+):
     masks, _, _ = model.eval(
         image_array,
         normalize=False,
         resample=True,
-        cellprob_threshold=+0.8,
-        batch_size=120,
-        tile_overlap=0.2,
+        cellprob_threshold=cellprob_threshold,
+        flow_threshold=flow_threshold,
+        batch_size=batch_size,
+        tile_overlap=tile_overlap,
     )
     return masks
 
-
+# %% [markdown]
+# # 🛠️ Segmentation Configuration
+#
+# Adjust the input and output folders, filter thresholds and cellpose parameters.
 # %% Adjust paths and parameters
-src_root = Path("input")
-dst_root = Path("output")
+# relative path to the input folder with the *.tiff images
+input_path = "input"
+# relative path for the output
+output_path = "output"
+# save unfiltered segmentation
 save_unfiltered = False
+# filter cells that have a mean normalised marker intensity below
 th_mean = 0.35
+# filter cells that have a normalised marker intensity below th_pos
+# for more than th_ratio_pos[%] amount of pixels
 th_pos = 0.2
 th_ratio_pos = 0.95
 
+# cellpose machine learning parameters
+# https://cellpose.readthedocs.io/en/latest/api.html#cellpose.models.CellposeModel.eval
+# bigger cellprob_threshold results in smaller cells
+cellprob_threshold = 0.8
+# flow error threshold (all cells with errors below threshold are kept)
+flow_threshold = 0.4
+# bigger batch_size means faster segmentation but more RAM/VRAM needed
+batch_size = 64
+# % of overlap between individual tiles
+tile_overlap = 0.2
+
 # %% Segment each image
+src_root = Path(input_path)
+dst_root = Path(output_path)
 files = [f for f in src_root.rglob("*.tiff")]
 if not files:
     print("No Input files found, please put your .tiff files in the input folder")
@@ -68,12 +105,15 @@ else:
         # import image and preprocess
         reader = BioImage(src_path)
         img = reader.get_image_data("CYX").astype(np.float64)
-        img = np.delete(img, 1, axis=0)
+        img = np.delete(img, CHANNEL_MAP["Autofluorescence"], axis=0)
         for c in range(img.shape[0]):
             img[c] = contrast_stretching(img[c], (0.1, 99.9))
 
         # predict cells
-        img_segmented = segment_with_cellpose(img)
+        img_segmented = segment_with_cellpose(
+            img, cellprob_threshold, batch_size, tile_overlap, flow_threshold
+        )
+
         if save_unfiltered:
             stem = str(dst_path.name).split(".", 1)[0]
             suffix = "".join(dst_path.suffixes)
@@ -86,7 +126,7 @@ else:
                 physical_pixel_sizes=reader.physical_pixel_sizes,
             )
 
-        marker_img = img[0]
+        marker_img = img[CHANNEL_MAP["Marker"]]
         props = regionprops_table(
             img_segmented,
             intensity_image=marker_img,
@@ -132,14 +172,16 @@ else:
         )
 
 # %% [markdown]
-# Step 2: Generate Shape-XML
+# # Step 2: Generate Shape-XML
+# ### Step 2.1 Generate the T-Template
 # %% T-Template
-STEM_LEN = 180
-BAR_LEN = 120
-WIDTH = 15
-PADDING = 8
-XDIST = 9
-TILT_DEG = 2.5
+STEM_LEN = 180  # stem length of the T
+BAR_LEN = 120  # bar length of the T
+WIDTH = 15  # width of bar and stem
+PADDING = 8  # bright halo around the T
+XDIST = 9  # distance from the left side
+TILT_DEG = 2.5  # degree of upward tilt
+# note: only affects stem, the bar will be centered on the tilted T and will be straight
 
 
 def make_T_template(
@@ -238,12 +280,16 @@ def make_T_template(
     return canvas
 
 
+# %% Possibility to inspect the T
 # import matplotlib.pyplot as plt
 # template = make_T_template()
 # plt.imshow(template, cmap="grey", vmin=-1, vmax=1)
+# %% [markdown]
+# ### Step 2.2 Configure pyLMD and generate the XML
 # %% Adjust paths and parameters
+# details: https://mannlabs.github.io/py-lmd/pages/segmentation_loader.html#overview-of-configuration
 loader_config = {
-    "orientation_transform": np.array([[0, -1], [1, 0]]),
+    "orientation_transform": np.array([[0, -1], [1, 0]]),  # Fixed
     "binary_smoothing": 14,
     "convolution_smoothing": 15,
     "poly_compression_factor": 30,
@@ -253,16 +299,20 @@ loader_config = {
     "path_optimization": "none",
 }
 
-src_root = Path("input")
-dst_root = Path("output")
+# relative path to the input folder with the *.tiff images
+input_path = "input"
+# relative path for the output
+output_path = "output"
 
+# details: https://scikit-image.org/docs/stable/api/skimage.exposure.html#skimage.exposure.equalize_adapthist
 CLIP_LIMIT = 0.01
 KERNEL_SIZE = (256, 256)
 
-MARKER_RADIUS = 5
-MARKER_LINELEN = 3
+# cosmetic marker sizes in the "_calibdilated" images to help locate the exact position of the reference point
+MARKER_RADIUS = 5  # radius of the circle
+MARKER_LINELEN = 3  # len of the lines at the cardinals of the circle
 
-MAX_WORKERS = 6  # Number of parallel processes
+MAX_WORKERS = 6  # mumber of parallel processes; depends on CPU-Cores and RAM
 
 
 # %% Generate XML
@@ -279,7 +329,7 @@ def xml_shape_generator(src_path_str):
     shapes_path = dst_path.parent / f"{base}_shapes.xml"
 
     reader = BioImage(src_path)
-    img = reader.get_image_data("CYX").astype(np.float32)[1]
+    img = reader.get_image_data("CYX").astype(np.float32)[CHANNEL_MAP["Autofluorescence"]]
     img_inverted = 1 - contrast_stretching(img, (0, 100))
     img_inverted_rescaled = exposure.rescale_intensity(
         img_inverted.copy(), in_range=(0, 1), out_range=(-1, 1)
@@ -354,6 +404,8 @@ def xml_shape_generator(src_path_str):
     return str(src_path)
 
 
+src_root = Path(input_path)
+dst_root = Path(output_path)
 # gather files
 files = [str(p) for p in src_root.rglob("*.tiff") if "16" in str(p.name)]
 
