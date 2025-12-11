@@ -31,8 +31,10 @@ CHANNEL_MAP = {
 }
 # %% [markdown]
 # # Step 1: Segment Neutrophils
-# %% Use GPU if possible
-# Default is cpsam, if a custom / self-trained model is used please change to the path to the model
+# Define the cellpose model to use.
+# * Default is cpsam.
+# * a custom / self-trained cellpose model can be used by changing ***pretrained_model*** to the path to the model.
+# %% Define model and Use GPU if possible
 pretrained_model = "cpsam"
 
 if not core.use_gpu():
@@ -92,9 +94,9 @@ cellprob_threshold = 0.8
 # flow error threshold (all cells with errors below threshold are kept)
 flow_threshold = 0.4
 # bigger batch_size means faster segmentation but more RAM/VRAM needed
-batch_size = 64
+batch_size = 8
 # % of overlap between individual tiles
-tile_overlap = 0.2
+tile_overlap = 0.1
 
 # %% Segment each image
 src_root = Path(input_path)
@@ -166,16 +168,15 @@ else:
             .to_numpy()
         )
         neutrophil_mask = np.isin(img_segmented, neutrophil_labels)
-        img_segmented_filtered = img_segmented[~neutrophil_mask] = 0
+        img_segmented[~neutrophil_mask] = 0
         OmeTiffWriter.save(
-            img_segmented_filtered,
+            img_segmented,
             dst_path,
             dim_order="YX",
             channel_names=["DAPI"],
             physical_pixel_sizes=reader.physical_pixel_sizes,
             compression=None,
         )
-
 # %% [markdown]
 # # Step 2: Generate Shape-XML
 # ### Step 2.1 Generate the T-Template
