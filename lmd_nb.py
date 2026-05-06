@@ -17,7 +17,23 @@ from skimage.measure import regionprops_table
 from tqdm import tqdm
 
 # %% [markdown]
-# # 🛠️ Channel Configuration
+# # Workflow overview
+# #### Preparation
+# 1. Burn fiducial T-marks into tissue section using LMD laser
+# 2. Acquire fluorescence microscopy images
+# #### Computational part 1
+# 3. Perform Cellpose-SAM segmentation
+# 4. Apply intensity and overlap filtering
+# #### Computational part 2
+# 5. Detect fiducials via FFT-based template matching
+# 6. Determine & export contours and coordinates via py-lmd as XML
+# #### Laser Capture Microdissection
+# 7. Import XML into Leica LMD software
+# 8. Align fiducials and perform excision
+# 9. Validate excision microscopically
+# %% [markdown]
+# ## Computational part 1
+# ### 🛠️ Channel Configuration
 #
 # Adjust the channel indices below to match your microscopy image configuration.
 # * Channels are 0-indexed (e.g., 0, 1, 2, ...).
@@ -30,7 +46,7 @@ CHANNEL_MAP = {
     "DAPI": 2,
 }
 # %% [markdown]
-# # Step 1: Segment Neutrophils
+# ### 🛠️ Model Configuration
 # Define the cellpose model to use.
 # * Default is cpsam.
 # * a custom / self-trained cellpose model can be used by changing ***pretrained_model*** to the path to the model.
@@ -70,7 +86,7 @@ def segment_with_cellpose(
 
 
 # %% [markdown]
-# # 🛠️ Segmentation Configuration
+# ### 🛠️ Segmentation Configuration
 #
 # Adjust the input and output folders, filter thresholds and cellpose parameters.
 # %% Adjust paths and parameters
@@ -132,8 +148,8 @@ else:
                 channel_names=["DAPI"],
                 physical_pixel_sizes=reader.physical_pixel_sizes,
             )
-
-        marker_img = img[CHANNEL_MAP["Marker"]]
+        marker_key = CHANNEL_MAP["Marker"] if CHANNEL_MAP["Marker"] != 2 else 1
+        marker_img = img[marker_key]
         props = regionprops_table(
             img_segmented,
             intensity_image=marker_img,
@@ -178,15 +194,15 @@ else:
             compression=None,
         )
 # %% [markdown]
-# # Step 2: Generate Shape-XML
-# ### Step 2.1 Generate the T-Template
+# ## Computational part 2
+# ### 2.1 Generate the T-Template
 # %% T-Template
 STEM_LEN = 180  # stem length of the T
 BAR_LEN = 120  # bar length of the T
 WIDTH = 15  # width of bar and stem
 PADDING = 8  # bright halo around the T
 XDIST = 9  # distance from the left side
-TILT_DEG = 2.5  # degree of upward tilt
+TILT_DEG = 2.5  # degree of upward tilt, or downward if negative
 # note: only affects stem, the bar will be centered on the tilted T and will be straight
 
 
@@ -230,10 +246,18 @@ def make_T_template(
     stem_crop = stem_mask_rot[s_y1:s_y2, s_x1:s_x2]
     crop_h, crop_w = stem_crop.shape
 
+    # Calculate the stem's end Y-coordinate in the rotated crop
+    stem_end_x_in_crop = s_x2 - s_x1 - 1  # Rightmost X in crop
+    stem_end_y_in_crop = stem_end_y_in_crop = int(
+        np.round(np.where(stem_crop[:, stem_end_x_in_crop])[0].mean())
+    )  # Average Y where stem ends in crop
+
     place_x1 = padding + xdist  # Distance to 0 on a-axis
     place_x2 = place_x1 + crop_w
     place_cy = h // 2
-    place_y1 = place_cy - crop_h // 2
+    place_y1 = (
+        place_cy - stem_end_y_in_crop
+    )  # Shift stem vertically to align its end with h//2
     place_y2 = place_y1 + crop_h
 
     sx1 = 0
@@ -254,16 +278,19 @@ def make_T_template(
     t_mask = np.zeros((h, w), dtype=bool)
     t_mask[dy1:dy2, dx1:dx2] |= stem_crop[sy1:sy2, sx1:sx2]
 
-    # create vertical bar centered on the stem's right end
-    stem_right = np.where(t_mask.any(axis=0))[0].max()
-    stem_center_y = h // 2
+    # Find the stem's rightmost point and its Y-coordinate
+    stem_right_x = np.where(t_mask.any(axis=0))[0].max()
+    stem_right_y = np.where(t_mask[:, stem_right_x])[
+        0
+    ].mean()  # Average Y where stem ends
 
-    # place bar so its horizontal center aligns with stem_right
-    bar_x_center = stem_right + 0.5
+    # Place bar so its center aligns with stem's right end
+    bar_x_center = stem_right_x + 0.5
+    bar_y_center = stem_right_y  # Use stem's end Y-coordinate
 
     bar_x1 = int(np.floor(bar_x_center - width / 2.0))
     bar_x2 = bar_x1 + width
-    bar_y1 = stem_center_y - bar_len // 2
+    bar_y1 = int(np.floor(bar_y_center - bar_len / 2.0))
     bar_y2 = bar_y1 + bar_len
 
     bar_x1c = max(0, bar_x1)
@@ -285,13 +312,17 @@ def make_T_template(
     canvas[out_mask] = 0.0
     return canvas
 
-
-# %% Possibility to inspect the T
-# import matplotlib.pyplot as plt
-# template = make_T_template()
-# plt.imshow(template, cmap="grey", vmin=-1, vmax=1)
 # %% [markdown]
-# ### Step 2.2 Configure pyLMD and generate the XML
+# #### Possibility to inspect the T
+# remove the # before "plt.imshow(template, cmap="grey", vmin=-1, vmax=1)" to inspect the T
+# %% 
+import matplotlib.pyplot as plt
+
+template = make_T_template()
+#plt.imshow(template, cmap="grey", vmin=-1, vmax=1)
+
+# %% [markdown]
+# ### 2.2 Configure pyLMD and generate the XML
 # %% Adjust paths and parameters
 # details: https://mannlabs.github.io/py-lmd/pages/segmentation_loader.html#overview-of-configuration
 loader_config = {
@@ -302,7 +333,7 @@ loader_config = {
     "shape_dilation": 2,
     "shape_erosion": 0,
     "distance_heuristic": 300,
-    "path_optimization": "none",
+    "path_optimization": "greedy",
 }
 
 # relative path to the input folder with the *.tiff images
