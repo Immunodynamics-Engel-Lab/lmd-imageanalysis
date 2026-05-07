@@ -84,3 +84,15 @@ Once configured, execute the pipeline using the following command:
 ```bash
 pixi run python lmd_nb.py
 ```
+
+---
+
+### 📊 Example data
+Example data for testing the *in silico* workflow is available on Zenodo:
+
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.17792442.svg)](https://doi.org/10.5281/zenodo.17792442)
+
+---
+
+### ✉️ Correspondence
+[**Prof. Dr. Daniel R. Engel**](mailto:danielrobert.engel@uk-essen.de): Department of Immunodynamics, Institute of Experimental Immunology and Imaging, University Hospital Essen, Essen, Germany
