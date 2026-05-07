@@ -8,6 +8,38 @@ The primary function of this repository is to identify the boundaries of target 
 
 ---
 
+
+## 🔬 Stepwise Workflow
+
+1. **Fiducial Marking**  
+   Burn fiducial T-marks into tissue sections using LMD laser.
+
+2. **Image Acquisition**  
+   Acquire fluorescence microscopy images.
+
+3. **Segmentation** (Computational part 1)  
+   Perform **Cellpose-SAM** segmentation to delineate cell boundaries.
+
+4. **Filtering** (Computational part 1)  
+   Apply intensity and overlap filtering to refine segmentation results.
+
+5. **Fiducial Detection** (Computational part 2)  
+   Detect fiducials via **FFT-based template matching**.
+
+6. **Data Export** (Computational part 2)  
+   Determine and export contours and coordinates via **pyLMD** as XML.
+
+7. **Software Integration**  
+   Import XML into **Leica LMD software**.
+
+8. **Alignment & Excision**  
+   Align fiducials and perform precise laser excision.
+
+9. **Validation**  
+   Validate excision results microscopically.
+
+---
+
 ## Getting Started
 
 ### 📋 Prerequisites

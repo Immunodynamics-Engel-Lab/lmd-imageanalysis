@@ -26,7 +26,7 @@ from tqdm import tqdm
 # 4. Apply intensity and overlap filtering
 # #### Computational part 2
 # 5. Detect fiducials via FFT-based template matching
-# 6. Determine & export contours and coordinates via py-lmd as XML
+# 6. Determine & export contours and coordinates via pyLMD as XML
 # #### Laser Capture Microdissection
 # 7. Import XML into Leica LMD software
 # 8. Align fiducials and perform excision
