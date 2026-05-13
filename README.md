@@ -88,9 +88,9 @@ pixi run python lmd_nb.py
 ---
 
 ### 📊 FAIR compliance
-Example data for testing the *in silico* workflow is available on [Zenodo](https://doi.org/10.5281/zenodo.17792442)
+Example data for testing the *in silico* workflow is available on [Zenodo](https://doi.org/10.5281/zenodo.17792441)
 
-The workflow is available through [Zenodo](https://doi.org/10.5281/zenodo.20067579) and [WorkflowHub](https://doi.org/10.48546/workflowhub.workflow.2168.1)
+The workflow is available through [Zenodo](https://doi.org/10.5281/zenodo.20067089) and [WorkflowHub](https://doi.org/10.48546/workflowhub.workflow.2168.1)
 
 All resources are publicly accessible and distributed under open licenses where applicable.
 
